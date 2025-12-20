@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  swarm:
+    build: .
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ENABLE_MOCK_MODE=${ENABLE_MOCK_MODE:-false}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - ./output:/app/output
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["swarm", "demo"]
+
+  # For development/testing
+  dev:
+    build: .
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ENABLE_MOCK_MODE=true
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["pytest", "tests/", "-v"]
