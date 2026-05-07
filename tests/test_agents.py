@@ -1,7 +1,5 @@
 """Tests for coding agents."""
 
-import pytest
-
 
 class TestBaseAgent:
     """Tests for BaseAgent class."""
@@ -28,7 +26,7 @@ class TestArchitectAgent:
 
     def test_create_architect(self, mock_config):
         """Test creating an architect agent."""
-        from coding_swarm.agents import create_architect, AgentRole
+        from coding_swarm.agents import AgentRole, create_architect
 
         agent = create_architect(mock_config)
         assert agent is not None
@@ -64,7 +62,7 @@ class TestCoderAgent:
 
     def test_create_coder(self, mock_config):
         """Test creating a coder agent."""
-        from coding_swarm.agents import create_coder, AgentRole
+        from coding_swarm.agents import AgentRole, create_coder
 
         agent = create_coder(mock_config)
         assert agent is not None
@@ -83,6 +81,24 @@ class TestCoderAgent:
         assert result.file_path == "src/main.py"
         assert result.code is not None
         assert len(result.code) > 0
+        assert result.generation_source == "mock"
+        assert result.is_degraded is True
+        assert result.warnings
+
+    def test_generate_code_parse_fallback_has_error_context(self, monkeypatch):
+        """Test raw Gemini fallback preserves parsing error context."""
+        from coding_swarm.agents import create_coder
+        from coding_swarm.models import SwarmConfig
+
+        agent = create_coder(SwarmConfig(enable_mock_mode=False, gemini_api_key="test"))
+        monkeypatch.setattr(agent, "_generate", lambda _prompt: "def main():\n    pass\n")
+
+        result = agent.generate_code("src/main.py", "Create a main module")
+
+        assert result.generation_source == "fallback"
+        assert result.is_degraded is True
+        assert "No valid JSON" in result.error
+        assert "Gemini response" in result.warnings[0]
 
     def test_generate_code_with_context(self, mock_config):
         """Test generating code with context."""
@@ -107,6 +123,7 @@ class TestCoderAgent:
 
         assert result.code == broken_code  # Mock returns same code
         assert result.explanation == "Mock fixed code"
+        assert result.generation_source == "mock"
 
 
 class TestRefactorerAgent:
@@ -114,7 +131,7 @@ class TestRefactorerAgent:
 
     def test_create_refactorer_agent(self, mock_config):
         """Test creating a refactorer agent."""
-        from coding_swarm.agents import create_refactorer_agent, AgentRole
+        from coding_swarm.agents import AgentRole, create_refactorer_agent
 
         agent = create_refactorer_agent(mock_config)
         assert agent is not None
@@ -136,7 +153,7 @@ class TestReviewerAgent:
 
     def test_create_reviewer(self, mock_config):
         """Test creating a reviewer agent."""
-        from coding_swarm.agents import create_reviewer, AgentRole
+        from coding_swarm.agents import AgentRole, create_reviewer
 
         agent = create_reviewer(mock_config)
         assert agent is not None
@@ -152,6 +169,23 @@ class TestReviewerAgent:
         assert review.file_path == "test.py"
         assert review.approved is True
         assert review.severity == "info"
+        assert review.generation_source == "mock"
+        assert review.is_degraded is True
+
+    def test_review_code_parse_fallback_is_not_silent_approval(self, monkeypatch, sample_code):
+        """Test review parse failures return a conservative degraded review."""
+        from coding_swarm.agents import create_reviewer
+        from coding_swarm.models import SwarmConfig
+
+        agent = create_reviewer(SwarmConfig(enable_mock_mode=False, gemini_api_key="test"))
+        monkeypatch.setattr(agent, "_generate", lambda _prompt: "not json")
+
+        review = agent.review_code(sample_code, "test.py")
+
+        assert review.approved is False
+        assert review.generation_source == "fallback"
+        assert review.is_degraded is True
+        assert review.error
 
 
 class TestTesterAgent:
@@ -159,7 +193,7 @@ class TestTesterAgent:
 
     def test_create_tester(self, mock_config):
         """Test creating a tester agent."""
-        from coding_swarm.agents import create_tester, AgentRole
+        from coding_swarm.agents import AgentRole, create_tester
 
         agent = create_tester(mock_config)
         assert agent is not None
@@ -175,6 +209,8 @@ class TestTesterAgent:
         assert result.file_path == "tests/test_main.py"
         assert "pytest" in result.imports
         assert "def test_" in result.code
+        assert result.generation_source == "mock"
+        assert result.is_degraded is True
 
     def test_generate_tests_custom_path(self, mock_config, sample_code):
         """Test generating tests with custom path."""
