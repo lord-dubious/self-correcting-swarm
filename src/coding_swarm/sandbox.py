@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import tempfile
 import time
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import docker
-    from docker.models.containers import Container
+from typing import Any
 
 from coding_swarm.models import SandboxResult, SwarmConfig, TestResult
 
@@ -25,18 +22,21 @@ class DockerSandbox:
         """
         self.config = config
         self.mock_mode = config.enable_mock_mode
-        self._client: docker.DockerClient | None = None
+        self._client: Any | None = None
 
     @property
-    def client(self) -> "docker.DockerClient":
+    def client(self) -> Any:
         """Get or create Docker client."""
         if self._client is None:
             if self.mock_mode:
-                return None  # type: ignore
-            import docker
-
+                raise RuntimeError("Docker client is unavailable while mock mode is enabled")
+            docker = import_module("docker")
             self._client = docker.from_env()
         return self._client
+
+    def _format_error(self, error: Exception) -> str:
+        """Return concise exception context for sandbox metadata."""
+        return f"{error.__class__.__name__}: {error}"
 
     def execute_code(
         self,
@@ -64,6 +64,9 @@ class DockerSandbox:
                 stderr="",
                 duration_seconds=0.1,
                 container_id="mock-container-id",
+                execution_source="mock",
+                is_degraded=True,
+                warnings=["Mock mode skipped Docker execution and returned a canned result."],
             )
 
         timeout = timeout or self.config.docker_timeout
@@ -108,7 +111,7 @@ class DockerSandbox:
                 stdout = container.logs(stdout=True, stderr=False).decode("utf-8")
                 stderr = container.logs(stdout=False, stderr=True).decode("utf-8")
 
-                container_id = container.id
+                container_id = container.id or ""
                 container.remove()
 
                 duration = time.time() - start_time
@@ -120,17 +123,25 @@ class DockerSandbox:
                     stderr=stderr,
                     duration_seconds=duration,
                     container_id=container_id,
+                    execution_source="docker",
                 )
 
             except Exception as e:
                 duration = time.time() - start_time
+                error = self._format_error(e)
                 return SandboxResult(
                     success=False,
                     exit_code=1,
                     stdout="",
-                    stderr=str(e),
+                    stderr=error,
                     duration_seconds=duration,
                     container_id="",
+                    execution_source="fallback",
+                    is_degraded=True,
+                    warnings=[
+                        "Docker execution failed before a successful sandbox result was available."
+                    ],
+                    error=error,
                 )
 
     def run_tests(
@@ -161,6 +172,11 @@ class DockerSandbox:
                 tests_run=5,
                 tests_passed=5,
                 tests_failed=0,
+                execution_source="mock",
+                is_degraded=True,
+                warnings=[
+                    "Mock mode skipped Docker test execution and returned canned pytest counts."
+                ],
             )
 
         timeout = timeout or self.config.docker_timeout
@@ -220,19 +236,25 @@ class DockerSandbox:
                     tests_run=tests_run,
                     tests_passed=tests_passed,
                     tests_failed=tests_failed,
+                    execution_source="docker",
                 )
 
             except Exception as e:
                 duration = time.time() - start_time
+                error = self._format_error(e)
                 return TestResult(
                     success=False,
                     exit_code=1,
                     stdout="",
-                    stderr=str(e),
+                    stderr=error,
                     duration_seconds=duration,
                     tests_run=0,
                     tests_passed=0,
                     tests_failed=0,
+                    execution_source="fallback",
+                    is_degraded=True,
+                    warnings=["Docker test execution failed before pytest results were available."],
+                    error=error,
                 )
 
     def _parse_pytest_output(self, output: str) -> tuple[int, int, int]:
