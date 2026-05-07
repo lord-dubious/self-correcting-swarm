@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "coding-swarm"
 version = "0.1.0"
-description = "Self-correcting coding swarm with LibCST, Docker sandboxing, and Gemini AI"
+description = "Experimental coding-swarm helpers with LibCST, Docker sandboxing, and Gemini integration"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

@@ -1,5 +1,18 @@
-"""Self-correcting coding swarm with LibCST, Docker, and Gemini AI."""
+"""Experimental coding-swarm helpers with explicit mock and sandbox boundaries."""
 
+from coding_swarm.agents import (
+    ArchitectAgent,
+    BaseAgent,
+    CoderAgent,
+    RefactorerAgent,
+    ReviewerAgent,
+    TesterAgent,
+    create_architect,
+    create_coder,
+    create_refactorer_agent,
+    create_reviewer,
+    create_tester,
+)
 from coding_swarm.models import (
     AgentRole,
     ArchitectPlan,
@@ -19,22 +32,9 @@ from coding_swarm.models import (
     create_session,
     create_task,
 )
-from coding_swarm.agents import (
-    ArchitectAgent,
-    BaseAgent,
-    CoderAgent,
-    RefactorerAgent,
-    ReviewerAgent,
-    TesterAgent,
-    create_architect,
-    create_coder,
-    create_refactorer_agent,
-    create_reviewer,
-    create_tester,
-)
 from coding_swarm.refactorer import (
-    CodeRefactorer,
     ClassRenamer,
+    CodeRefactorer,
     DocstringAdder,
     FunctionRenamer,
     ImportAdder,
