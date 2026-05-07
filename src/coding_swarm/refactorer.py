@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import cast
 
 import libcst as cst
-from libcst import matchers as m
 
 
 class ImportAdder(cst.CSTTransformer):
@@ -22,7 +21,7 @@ class ImportAdder(cst.CSTTransformer):
         self.existing_imports: set[str] = set()
         self._added = False
 
-    def visit_Import(self, node: cst.Import) -> bool:
+    def visit_Import(self, node: cst.Import) -> bool:  # noqa: N802
         """Track existing imports."""
         if isinstance(node.names, cst.ImportStar):
             return True
@@ -31,7 +30,7 @@ class ImportAdder(cst.CSTTransformer):
                 self.existing_imports.add(name.name.value)
         return True
 
-    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool:
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool:  # noqa: N802
         """Track existing from imports."""
         if isinstance(node.module, cst.Attribute):
             module_name = _get_dotted_name(node.module)
@@ -42,7 +41,9 @@ class ImportAdder(cst.CSTTransformer):
         self.existing_imports.add(module_name)
         return True
 
-    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+    def leave_Module(  # noqa: N802
+        self, original_node: cst.Module, updated_node: cst.Module
+    ) -> cst.Module:
         """Add imports at the top of the module."""
         if self._added:
             return updated_node
@@ -86,7 +87,7 @@ class FunctionRenamer(cst.CSTTransformer):
         self.old_name = old_name
         self.new_name = new_name
 
-    def leave_FunctionDef(
+    def leave_FunctionDef(  # noqa: N802
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ) -> cst.FunctionDef:
         """Rename function definition."""
@@ -94,7 +95,9 @@ class FunctionRenamer(cst.CSTTransformer):
             return updated_node.with_changes(name=cst.Name(self.new_name))
         return updated_node
 
-    def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.Call:
+    def leave_Call(  # noqa: N802
+        self, original_node: cst.Call, updated_node: cst.Call
+    ) -> cst.Call:
         """Rename function calls."""
         if isinstance(updated_node.func, cst.Name):
             if updated_node.func.value == self.old_name:
@@ -111,7 +114,7 @@ class ClassRenamer(cst.CSTTransformer):
         self.old_name = old_name
         self.new_name = new_name
 
-    def leave_ClassDef(
+    def leave_ClassDef(  # noqa: N802
         self, original_node: cst.ClassDef, updated_node: cst.ClassDef
     ) -> cst.ClassDef:
         """Rename class definition."""
@@ -119,7 +122,9 @@ class ClassRenamer(cst.CSTTransformer):
             return updated_node.with_changes(name=cst.Name(self.new_name))
         return updated_node
 
-    def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
+    def leave_Name(  # noqa: N802
+        self, original_node: cst.Name, updated_node: cst.Name
+    ) -> cst.Name:
         """Rename class references."""
         if updated_node.value == self.old_name:
             return updated_node.with_changes(value=self.new_name)
@@ -135,7 +140,7 @@ class DocstringAdder(cst.CSTTransformer):
         self.target_name = target_name
         self.docstring = docstring
 
-    def leave_FunctionDef(
+    def leave_FunctionDef(  # noqa: N802
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ) -> cst.FunctionDef:
         """Add docstring to function."""
@@ -155,7 +160,8 @@ class DocstringAdder(cst.CSTTransformer):
             body=[cst.Expr(cst.SimpleString(f'"""{self.docstring}"""'))]
         )
 
-        new_body = cst.IndentedBlock(body=[docstring_node] + list(updated_node.body.body))
+        existing_body = list(cast("tuple[cst.BaseStatement, ...]", updated_node.body.body))
+        new_body = cst.IndentedBlock(body=[docstring_node, *existing_body])
         return updated_node.with_changes(body=new_body)
 
 
@@ -168,7 +174,9 @@ class TypeHintAdder(cst.CSTTransformer):
         self.function_name = function_name
         self.param_types = param_types
 
-    def leave_Param(self, original_node: cst.Param, updated_node: cst.Param) -> cst.Param:
+    def leave_Param(  # noqa: N802
+        self, original_node: cst.Param, updated_node: cst.Param
+    ) -> cst.Param:
         """Add type hints to parameters."""
         if updated_node.name.value in self.param_types:
             type_str = self.param_types[updated_node.name.value]
@@ -177,7 +185,7 @@ class TypeHintAdder(cst.CSTTransformer):
         return updated_node
 
 
-def _get_dotted_name(node: cst.Attribute | cst.Name) -> str:
+def _get_dotted_name(node: cst.BaseExpression) -> str:
     """Get dotted name from an Attribute or Name node."""
     if isinstance(node, cst.Name):
         return node.value
