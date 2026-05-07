@@ -1,7 +1,5 @@
 """Tests for the CodingSwarm orchestrator."""
 
-import pytest
-from pathlib import Path
 import tempfile
 
 
@@ -76,6 +74,8 @@ class TestCodingSwarm:
         assert code_file is not None
         assert code_file.path == "src/utils.py"
         assert len(code_file.content) > 0
+        assert code_file.generation_source == "mock"
+        assert code_file.is_degraded is True
 
     def test_generate_file_with_context(self, mock_config):
         """Test generating file with context."""
@@ -239,8 +239,8 @@ class TestBuildContext:
 
     def test_build_context_with_files(self, mock_config):
         """Test building context from files."""
-        from coding_swarm.swarm import create_swarm
         from coding_swarm.models import CodeFile
+        from coding_swarm.swarm import create_swarm
 
         swarm = create_swarm(mock_config)
         files = {
