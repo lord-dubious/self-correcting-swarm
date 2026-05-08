@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 from typing import Any
 
 from coding_swarm.models import (
@@ -10,7 +11,6 @@ from coding_swarm.models import (
     ArchitectPlan,
     CodeGeneration,
     CodeReview,
-    ProjectStructure,
     RefactorOperation,
     SwarmConfig,
 )
@@ -30,13 +30,13 @@ class BaseAgent:
         self.config = config
         self.mock_mode = config.enable_mock_mode
         self._model = None
+        self.last_error = ""
 
     @property
     def model(self):
         """Get or create the Gemini model."""
         if self._model is None and not self.mock_mode:
-            import google.generativeai as genai
-
+            genai = import_module("google.generativeai")
             genai.configure(api_key=self.config.gemini_api_key)
             self._model = genai.GenerativeModel(self.config.gemini_model)
         return self._model
@@ -53,8 +53,15 @@ class BaseAgent:
         if self.mock_mode:
             return self._mock_response(prompt)
 
-        response = self.model.generate_content(prompt)
-        return response.text
+        model = self.model
+        if model is None:
+            raise RuntimeError("Gemini model is unavailable")
+        response = model.generate_content(prompt)
+        return str(response.text)
+
+    def _format_error(self, error: Exception) -> str:
+        """Return concise exception context for degraded metadata."""
+        return f"{error.__class__.__name__}: {error}"
 
     def _mock_response(self, prompt: str) -> str:
         """Generate mock response for testing.
@@ -66,6 +73,22 @@ class BaseAgent:
             Mock response
         """
         return "Mock response"
+
+
+def _loads_json_object(text: str) -> dict[str, Any]:
+    """Load a JSON object and reject other JSON values."""
+    result = json.loads(text)
+    if not isinstance(result, dict):
+        raise ValueError("JSON response was not an object")
+    return result
+
+
+def _loads_json_array(text: str) -> list[dict[str, Any]]:
+    """Load a JSON array of objects and reject other JSON values."""
+    result = json.loads(text)
+    if not isinstance(result, list) or not all(isinstance(item, dict) for item in result):
+        raise ValueError("JSON response was not an array of objects")
+    return result
 
 
 class ArchitectAgent(BaseAgent):
@@ -120,11 +143,11 @@ Return ONLY valid JSON, no markdown."""
             # Try to parse JSON from response
             data = self._extract_json(response)
             return ArchitectPlan(**data)
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             # Fallback
             return ArchitectPlan(
                 project_name="project",
-                description=description,
+                description=f"{description} (fallback plan; Gemini response could not be parsed: {self._format_error(exc)})",
                 file_structure=["src/main.py"],
                 modules=["Main module"],
                 dependencies=[],
@@ -135,7 +158,7 @@ Return ONLY valid JSON, no markdown."""
         """Extract JSON from text response."""
         # Try direct parse
         try:
-            return json.loads(text)
+            return _loads_json_object(text)
         except json.JSONDecodeError:
             pass
 
@@ -144,7 +167,7 @@ Return ONLY valid JSON, no markdown."""
 
         json_match = re.search(r"\{[\s\S]*\}", text)
         if json_match:
-            return json.loads(json_match.group())
+            return _loads_json_object(json_match.group())
 
         raise ValueError("No valid JSON found in response")
 
@@ -189,6 +212,9 @@ if __name__ == "__main__":
                 code=mock_code,
                 explanation="Mock generated code",
                 imports=["typing"],
+                generation_source="mock",
+                is_degraded=True,
+                warnings=["Mock mode returned deterministic placeholder code."],
             )
 
         context_text = f"\nContext from other files:\n{context}" if context else ""
@@ -224,14 +250,19 @@ Return ONLY valid JSON, no markdown code blocks."""
                 code=data.get("code", ""),
                 explanation=data.get("explanation", ""),
                 imports=data.get("imports", []),
+                generation_source="gemini",
             )
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             # Try to extract code directly
             return CodeGeneration(
                 file_path=file_path,
                 code=response,
-                explanation="Generated code",
+                explanation="Fallback raw Gemini response because JSON parsing failed",
                 imports=[],
+                generation_source="fallback",
+                is_degraded=True,
+                warnings=["Gemini response was not valid CodeGeneration JSON."],
+                error=self._format_error(exc),
             )
 
     def fix_code(self, code: str, error: str, file_path: str = "") -> CodeGeneration:
@@ -251,6 +282,9 @@ Return ONLY valid JSON, no markdown code blocks."""
                 code=code,
                 explanation="Mock fixed code",
                 imports=[],
+                generation_source="mock",
+                is_degraded=True,
+                warnings=["Mock mode preserves the original code instead of applying a real fix."],
             )
 
         prompt = f"""You are an expert Python developer. Fix this broken code.
@@ -281,19 +315,24 @@ Return ONLY valid JSON, no markdown."""
                 code=data.get("code", code),
                 explanation=data.get("explanation", ""),
                 imports=data.get("imports", []),
+                generation_source="gemini",
             )
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             return CodeGeneration(
                 file_path=file_path,
                 code=response,
-                explanation="Attempted fix",
+                explanation="Fallback raw Gemini response because fix JSON parsing failed",
                 imports=[],
+                generation_source="fallback",
+                is_degraded=True,
+                warnings=["Gemini fix response was not valid CodeGeneration JSON."],
+                error=self._format_error(exc),
             )
 
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from text response."""
         try:
-            return json.loads(text)
+            return _loads_json_object(text)
         except json.JSONDecodeError:
             pass
 
@@ -301,7 +340,7 @@ Return ONLY valid JSON, no markdown."""
 
         json_match = re.search(r"\{[\s\S]*\}", text)
         if json_match:
-            return json.loads(json_match.group())
+            return _loads_json_object(json_match.group())
 
         raise ValueError("No valid JSON found")
 
@@ -354,16 +393,14 @@ Respond with a JSON array of operations. Return ONLY valid JSON."""
         try:
             data = self._extract_json_array(response)
             return [RefactorOperation(file_path=file_path, **op) for op in data]
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.last_error = self._format_error(exc)
             return []
 
     def _extract_json_array(self, text: str) -> list[dict[str, Any]]:
         """Extract JSON array from text."""
         try:
-            result = json.loads(text)
-            if isinstance(result, list):
-                return result
-            return []
+            return _loads_json_array(text)
         except json.JSONDecodeError:
             pass
 
@@ -371,7 +408,7 @@ Respond with a JSON array of operations. Return ONLY valid JSON."""
 
         json_match = re.search(r"\[[\s\S]*\]", text)
         if json_match:
-            return json.loads(json_match.group())
+            return _loads_json_array(json_match.group())
 
         return []
 
@@ -398,6 +435,9 @@ class ReviewerAgent(BaseAgent):
                 issues=[],
                 suggestions=["Consider adding more tests"],
                 severity="info",
+                generation_source="mock",
+                is_degraded=True,
+                warnings=["Mock mode returned a deterministic placeholder review."],
             )
 
         prompt = f"""You are a senior code reviewer. Review this code thoroughly.
@@ -435,20 +475,25 @@ Return ONLY valid JSON."""
                 issues=data.get("issues", []),
                 suggestions=data.get("suggestions", []),
                 severity=data.get("severity", "info"),
+                generation_source="gemini",
             )
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             return CodeReview(
                 file_path=file_path,
-                approved=True,
-                issues=[],
+                approved=False,
+                issues=["Gemini review response could not be parsed."],
                 suggestions=[],
-                severity="info",
+                severity="warning",
+                generation_source="fallback",
+                is_degraded=True,
+                warnings=["Review fell back to a conservative parse-failure result."],
+                error=self._format_error(exc),
             )
 
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from text."""
         try:
-            return json.loads(text)
+            return _loads_json_object(text)
         except json.JSONDecodeError:
             pass
 
@@ -456,7 +501,7 @@ Return ONLY valid JSON."""
 
         json_match = re.search(r"\{[\s\S]*\}", text)
         if json_match:
-            return json.loads(json_match.group())
+            return _loads_json_object(json_match.group())
 
         raise ValueError("No valid JSON found")
 
@@ -508,6 +553,9 @@ def test_main():
                 code=mock_tests,
                 explanation="Mock generated tests",
                 imports=["pytest"],
+                generation_source="mock",
+                is_degraded=True,
+                warnings=["Mock mode returned placeholder tests."],
             )
 
         prompt = f"""You are a test engineer. Generate comprehensive pytest tests.
@@ -542,19 +590,24 @@ Return ONLY valid JSON."""
                 code=data.get("code", ""),
                 explanation=data.get("explanation", ""),
                 imports=data.get("imports", ["pytest"]),
+                generation_source="gemini",
             )
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             return CodeGeneration(
                 file_path=test_path,
                 code=response,
-                explanation="Generated tests",
+                explanation="Fallback raw Gemini response because test JSON parsing failed",
                 imports=["pytest"],
+                generation_source="fallback",
+                is_degraded=True,
+                warnings=["Gemini test response was not valid CodeGeneration JSON."],
+                error=self._format_error(exc),
             )
 
     def _extract_json(self, text: str) -> dict[str, Any]:
         """Extract JSON from text."""
         try:
-            return json.loads(text)
+            return _loads_json_object(text)
         except json.JSONDecodeError:
             pass
 
@@ -562,7 +615,7 @@ Return ONLY valid JSON."""
 
         json_match = re.search(r"\{[\s\S]*\}", text)
         if json_match:
-            return json.loads(json_match.group())
+            return _loads_json_object(json_match.group())
 
         raise ValueError("No valid JSON found")
 

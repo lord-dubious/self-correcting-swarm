@@ -21,12 +21,10 @@ from coding_swarm.agents import (
 )
 from coding_swarm.models import (
     CodeFile,
-    CodingTask,
     FileOperation,
     ProjectStructure,
     SwarmConfig,
     SwarmSession,
-    TaskStatus,
     TestResult,
 )
 from coding_swarm.refactorer import CodeRefactorer, create_refactorer
@@ -126,6 +124,10 @@ class CodingSwarm:
                 content=generation.code,
                 language="python",
                 operation=FileOperation.CREATE,
+                generation_source=generation.generation_source,
+                is_degraded=generation.is_degraded,
+                warnings=generation.warnings,
+                error=generation.error,
             )
             generated_files[file_path] = code_file
             project.files.append(code_file)
@@ -146,6 +148,10 @@ class CodingSwarm:
                 content=test_gen.code,
                 language="python",
                 operation=FileOperation.CREATE,
+                generation_source=test_gen.generation_source,
+                is_degraded=test_gen.is_degraded,
+                warnings=test_gen.warnings,
+                error=test_gen.error,
             )
             project.files.append(test_file)
             test_files_to_add[test_gen.file_path] = test_file
@@ -235,6 +241,10 @@ class CodingSwarm:
             content=generation.code,
             language="python",
             operation=FileOperation.CREATE,
+            generation_source=generation.generation_source,
+            is_degraded=generation.is_degraded,
+            warnings=generation.warnings,
+            error=generation.error,
         )
 
     def refactor_code(self, code: str, file_path: str = "") -> str:
@@ -314,16 +324,16 @@ class CodingSwarm:
         try:
             if suggestion.operation_type == "add_import":
                 return self.refactorer.add_imports(code, [suggestion.new_value])
-            elif suggestion.operation_type == "rename_function":
+            if suggestion.operation_type == "rename_function":
                 return self.refactorer.rename_function(
                     code, suggestion.target, suggestion.new_value
                 )
-            elif suggestion.operation_type == "rename_class":
+            if suggestion.operation_type == "rename_class":
                 return self.refactorer.rename_class(code, suggestion.target, suggestion.new_value)
-            elif suggestion.operation_type == "add_docstring":
+            if suggestion.operation_type == "add_docstring":
                 return self.refactorer.add_docstring(code, suggestion.target, suggestion.new_value)
         except Exception:
-            pass
+            return code
 
         return code
 
@@ -358,6 +368,10 @@ class CodingSwarm:
                 content=fixed_gen.code,
                 language="python",
                 operation=FileOperation.MODIFY,
+                generation_source=fixed_gen.generation_source,
+                is_degraded=fixed_gen.is_degraded,
+                warnings=fixed_gen.warnings,
+                error=fixed_gen.error,
             )
 
         return fixed

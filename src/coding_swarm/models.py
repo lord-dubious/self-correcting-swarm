@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AgentRole(str, Enum):
@@ -43,6 +43,8 @@ class FileOperation(str, Enum):
 class SwarmConfig(BaseSettings):
     """Configuration for the coding swarm."""
 
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     gemini_api_key: str = Field(default="", description="Gemini API key")
     gemini_model: str = Field(default="gemini-2.0-flash", description="Gemini model to use")
     docker_image: str = Field(default="python:3.11-slim", description="Docker image for sandbox")
@@ -53,12 +55,6 @@ class SwarmConfig(BaseSettings):
     enable_mock_mode: bool = Field(default=False, description="Enable mock mode for testing")
     output_dir: str = Field(default="./output", description="Output directory for generated code")
 
-    class Config:
-        """Pydantic settings configuration."""
-
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
 
 class CodeFile(BaseModel):
     """Represents a code file."""
@@ -67,6 +63,12 @@ class CodeFile(BaseModel):
     content: str = Field(default="", description="File content")
     language: str = Field(default="python", description="Programming language")
     operation: FileOperation = Field(default=FileOperation.CREATE, description="File operation")
+    generation_source: str = Field(default="unknown", description="Source of generated content")
+    is_degraded: bool = Field(
+        default=False, description="Whether content came from a degraded path"
+    )
+    warnings: list[str] = Field(default_factory=list, description="Non-fatal generation warnings")
+    error: str = Field(default="", description="Generation error context, if any")
 
     @property
     def filename(self) -> str:
@@ -96,6 +98,10 @@ class CodeGeneration(BaseModel):
     code: str = Field(..., description="Generated code")
     explanation: str = Field(default="", description="Explanation of the code")
     imports: list[str] = Field(default_factory=list, description="Required imports")
+    generation_source: str = Field(default="unknown", description="mock, gemini, or fallback")
+    is_degraded: bool = Field(default=False, description="Whether generation used a degraded path")
+    warnings: list[str] = Field(default_factory=list, description="Non-fatal generation warnings")
+    error: str = Field(default="", description="Generation or parsing error context")
 
 
 class RefactorOperation(BaseModel):
@@ -119,6 +125,10 @@ class TestResult(BaseModel):
     tests_run: int = Field(default=0, description="Number of tests run")
     tests_passed: int = Field(default=0, description="Number of tests passed")
     tests_failed: int = Field(default=0, description="Number of tests failed")
+    execution_source: str = Field(default="unknown", description="mock, docker, or fallback")
+    is_degraded: bool = Field(default=False, description="Whether execution used a degraded path")
+    warnings: list[str] = Field(default_factory=list, description="Non-fatal execution warnings")
+    error: str = Field(default="", description="Execution error context")
 
 
 class SandboxResult(BaseModel):
@@ -130,6 +140,10 @@ class SandboxResult(BaseModel):
     stderr: str = Field(default="", description="Standard error")
     duration_seconds: float = Field(default=0.0, description="Execution duration")
     container_id: str = Field(default="", description="Docker container ID")
+    execution_source: str = Field(default="unknown", description="mock, docker, or fallback")
+    is_degraded: bool = Field(default=False, description="Whether execution used a degraded path")
+    warnings: list[str] = Field(default_factory=list, description="Non-fatal execution warnings")
+    error: str = Field(default="", description="Execution error context")
 
 
 class CodingTask(BaseModel):
@@ -191,6 +205,10 @@ class CodeReview(BaseModel):
     issues: list[str] = Field(default_factory=list, description="Issues found")
     suggestions: list[str] = Field(default_factory=list, description="Improvement suggestions")
     severity: str = Field(default="info", description="Review severity (info, warning, error)")
+    generation_source: str = Field(default="unknown", description="mock, gemini, or fallback")
+    is_degraded: bool = Field(default=False, description="Whether review used a degraded path")
+    warnings: list[str] = Field(default_factory=list, description="Non-fatal review warnings")
+    error: str = Field(default="", description="Review generation or parsing error context")
 
 
 def create_config(**kwargs) -> SwarmConfig:

@@ -1,7 +1,5 @@
 """Tests for Docker sandbox."""
 
-import pytest
-
 
 class TestDockerSandbox:
     """Tests for DockerSandbox class."""
@@ -33,6 +31,32 @@ class TestDockerSandbox:
         assert result.exit_code == 0
         assert "Mock execution" in result.stdout
         assert result.container_id == "mock-container-id"
+        assert result.execution_source == "mock"
+        assert result.is_degraded is True
+        assert result.warnings
+
+    def test_execute_code_docker_failure_has_metadata(self):
+        """Test Docker execution failures expose fallback metadata."""
+        from coding_swarm.models import SwarmConfig
+        from coding_swarm.sandbox import create_sandbox
+
+        class FailingContainers:
+            def run(self, **_kwargs):
+                raise RuntimeError("docker unavailable")
+
+        class FailingClient:
+            containers = FailingContainers()
+
+        sandbox = create_sandbox(SwarmConfig(enable_mock_mode=False))
+        sandbox._client = FailingClient()
+
+        result = sandbox.execute_code("print('hello')")
+
+        assert result.success is False
+        assert result.execution_source == "fallback"
+        assert result.is_degraded is True
+        assert "RuntimeError: docker unavailable" in result.stderr
+        assert result.error == result.stderr
 
     def test_execute_code_with_requirements(self, mock_config):
         """Test executing code with requirements."""
@@ -61,6 +85,31 @@ class TestDockerSandbox:
         assert result.tests_run == 5
         assert result.tests_passed == 5
         assert result.tests_failed == 0
+        assert result.execution_source == "mock"
+        assert result.is_degraded is True
+
+    def test_run_tests_docker_failure_has_metadata(self):
+        """Test Docker test failures expose fallback metadata."""
+        from coding_swarm.models import SwarmConfig
+        from coding_swarm.sandbox import create_sandbox
+
+        class FailingContainers:
+            def run(self, **_kwargs):
+                raise RuntimeError("docker unavailable")
+
+        class FailingClient:
+            containers = FailingContainers()
+
+        sandbox = create_sandbox(SwarmConfig(enable_mock_mode=False))
+        sandbox._client = FailingClient()
+
+        result = sandbox.run_tests({"test_main.py": "def test_ok(): assert True"})
+
+        assert result.success is False
+        assert result.execution_source == "fallback"
+        assert result.is_degraded is True
+        assert "RuntimeError: docker unavailable" in result.stderr
+        assert result.error == result.stderr
 
     def test_is_available_mock_mode(self, mock_config):
         """Test checking availability in mock mode."""

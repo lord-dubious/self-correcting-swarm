@@ -1,8 +1,5 @@
 """Tests for Pydantic models."""
 
-import pytest
-from datetime import datetime
-
 
 class TestSwarmConfig:
     """Tests for SwarmConfig model."""
@@ -117,7 +114,7 @@ class TestCodingTask:
 
     def test_create_task_factory(self):
         """Test create_task factory function."""
-        from coding_swarm.models import create_task, TaskStatus
+        from coding_swarm.models import TaskStatus, create_task
 
         task = create_task("task-2", "Build API", status=TaskStatus.IN_PROGRESS)
         assert task.id == "task-2"
@@ -174,6 +171,9 @@ class TestAgentModels:
         )
         assert gen.file_path == "src/main.py"
         assert "def main" in gen.code
+        assert gen.generation_source == "unknown"
+        assert gen.is_degraded is False
+        assert gen.warnings == []
 
     def test_refactor_operation(self):
         """Test RefactorOperation model."""
@@ -199,6 +199,8 @@ class TestAgentModels:
         )
         assert review.approved is True
         assert len(review.suggestions) == 1
+        assert review.generation_source == "unknown"
+        assert review.error == ""
 
 
 class TestResultModels:
@@ -218,6 +220,8 @@ class TestResultModels:
         )
         assert result.success is True
         assert result.tests_passed == 5
+        assert result.execution_source == "unknown"
+        assert result.is_degraded is False
 
     def test_sandbox_result(self):
         """Test SandboxResult model."""
@@ -230,6 +234,7 @@ class TestResultModels:
             duration_seconds=1.5,
         )
         assert result.success is True
+        assert result.execution_source == "unknown"
         assert result.duration_seconds == 1.5
 
 

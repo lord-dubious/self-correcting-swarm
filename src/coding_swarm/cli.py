@@ -8,15 +8,15 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.table import Table
 from rich.syntax import Syntax
+from rich.table import Table
 
 from coding_swarm.models import SwarmConfig, create_config
-from coding_swarm.swarm import CodingSwarm, create_swarm
+from coding_swarm.swarm import create_swarm
 
 app = typer.Typer(
     name="swarm",
-    help="Self-correcting coding swarm with LibCST, Docker, and Gemini AI",
+    help="Experimental coding-swarm helpers with visible mock, Gemini, and Docker fallback behavior",
     add_completion=False,
 )
 console = Console()
@@ -24,7 +24,7 @@ console = Console()
 
 def get_config(api_key: str | None = None, mock: bool = False) -> SwarmConfig:
     """Get configuration with optional overrides."""
-    kwargs = {"enable_mock_mode": mock}
+    kwargs: dict[str, object] = {"enable_mock_mode": mock}
     if api_key:
         kwargs["gemini_api_key"] = api_key
     return create_config(**kwargs)
@@ -39,7 +39,7 @@ def generate(
     max_retries: int = typer.Option(3, "--retries", help="Maximum retry attempts"),
     mock: bool = typer.Option(False, "--mock", help="Use mock mode for testing"),
 ) -> None:
-    """Generate a complete project from a description."""
+    """Generate a project draft from a description."""
     config = get_config(api_key, mock)
     config.output_dir = output
 
@@ -64,7 +64,7 @@ def generate(
 
             # Display results
             console.print()
-            console.print(Panel(f"[green]Project generated successfully![/green]"))
+            console.print(Panel("[green]Project generated successfully![/green]"))
 
             if session.project:
                 table = Table(title="Project Summary")
@@ -102,7 +102,7 @@ def generate_file(
     api_key: str = typer.Option(None, "--api-key", "-k", envvar="GEMINI_API_KEY"),
     mock: bool = typer.Option(False, "--mock", help="Use mock mode"),
 ) -> None:
-    """Generate a single file."""
+    """Generate a single file draft."""
     config = get_config(api_key, mock)
     swarm = create_swarm(config)
 
@@ -266,8 +266,8 @@ def validate(
 
 @app.command()
 def demo() -> None:
-    """Run a demo project generation in mock mode."""
-    console.print(Panel("[cyan]Running demo in mock mode...[/cyan]"))
+    """Run a deterministic mock-mode demo."""
+    console.print(Panel("[cyan]Running deterministic mock-mode demo...[/cyan]"))
 
     config = get_config(mock=True)
     swarm = create_swarm(config)
@@ -278,7 +278,7 @@ def demo() -> None:
             requirements=["Support error handling for division by zero"],
         )
 
-        console.print("\n[green]Demo completed successfully![/green]")
+        console.print("\n[green]Demo completed with mock outputs.[/green]")
 
         if session.project:
             console.print(f"\nProject: {session.project.name}")
@@ -309,7 +309,7 @@ def info() -> None:
     from coding_swarm.refactorer import create_refactorer
     from coding_swarm.sandbox import create_sandbox
 
-    console.print(Panel("[cyan]Self-Correcting Coding Swarm[/cyan]", title="System Info"))
+    console.print(Panel("[cyan]Coding Swarm Environment[/cyan]", title="System Info"))
 
     table = Table()
     table.add_column("Component", style="cyan")

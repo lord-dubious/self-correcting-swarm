@@ -1,7 +1,5 @@
 """Tests for LibCST refactoring utilities."""
 
-import pytest
-
 
 class TestCodeRefactorer:
     """Tests for CodeRefactorer class."""
@@ -157,8 +155,9 @@ class TestImportAdder:
 
     def test_import_adder_single(self):
         """Test adding a single import."""
-        from coding_swarm.refactorer import ImportAdder
         import libcst as cst
+
+        from coding_swarm.refactorer import ImportAdder
 
         code = "x = 1"
         tree = cst.parse_module(code)
@@ -169,8 +168,9 @@ class TestImportAdder:
 
     def test_import_adder_multiple(self):
         """Test adding multiple imports."""
-        from coding_swarm.refactorer import ImportAdder
         import libcst as cst
+
+        from coding_swarm.refactorer import ImportAdder
 
         code = "x = 1"
         tree = cst.parse_module(code)
@@ -186,8 +186,9 @@ class TestFunctionRenamer:
 
     def test_function_renamer_definition(self):
         """Test renaming function definition."""
-        from coding_swarm.refactorer import FunctionRenamer
         import libcst as cst
+
+        from coding_swarm.refactorer import FunctionRenamer
 
         code = "def foo(): pass"
         tree = cst.parse_module(code)
@@ -199,8 +200,9 @@ class TestFunctionRenamer:
 
     def test_function_renamer_call(self):
         """Test renaming function calls."""
-        from coding_swarm.refactorer import FunctionRenamer
         import libcst as cst
+
+        from coding_swarm.refactorer import FunctionRenamer
 
         code = "def foo(): pass\nfoo()"
         tree = cst.parse_module(code)
@@ -215,8 +217,9 @@ class TestClassRenamer:
 
     def test_class_renamer_definition(self):
         """Test renaming class definition."""
-        from coding_swarm.refactorer import ClassRenamer
         import libcst as cst
+
+        from coding_swarm.refactorer import ClassRenamer
 
         code = "class Foo: pass"
         tree = cst.parse_module(code)
@@ -232,8 +235,9 @@ class TestDocstringAdder:
 
     def test_docstring_adder(self):
         """Test adding docstring to function."""
-        from coding_swarm.refactorer import DocstringAdder
         import libcst as cst
+
+        from coding_swarm.refactorer import DocstringAdder
 
         code = "def foo(): pass"
         tree = cst.parse_module(code)
@@ -244,8 +248,9 @@ class TestDocstringAdder:
 
     def test_docstring_adder_skip_existing(self):
         """Test that existing docstrings are not replaced."""
-        from coding_swarm.refactorer import DocstringAdder
         import libcst as cst
+
+        from coding_swarm.refactorer import DocstringAdder
 
         code = '''def foo():
     """Existing docstring."""
@@ -263,8 +268,9 @@ class TestTypeHintAdder:
 
     def test_type_hint_adder(self):
         """Test adding type hints to parameters."""
-        from coding_swarm.refactorer import TypeHintAdder
         import libcst as cst
+
+        from coding_swarm.refactorer import TypeHintAdder
 
         code = "def greet(name): return name"
         tree = cst.parse_module(code)
