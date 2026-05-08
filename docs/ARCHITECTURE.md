@@ -14,12 +14,49 @@ This document is written for reviewers who want to understand how the project is
 6. Generated files with provenance
 
 ```mermaid
-flowchart LR
-    A1[Task prompt] --> A2[Coder agent]
-    A2[Coder agent] --> A3[Reviewer/tester agents]
-    A3[Reviewer/tester agents] --> A4[LibCST refactoring]
-    A4[LibCST refactoring] --> A5[Docker sandbox execution]
-    A5[Docker sandbox execution] --> A6[Generated files with provenance]
+flowchart TB
+    classDef input fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#164e63
+    classDef core fill:#eef2ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
+    classDef external fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+    classDef metadata fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d
+    classDef review fill:#fef2f2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
+
+    Prompt[/Coding task prompt/]:::input
+    Maintainer[/Developer review/]:::review
+
+    subgraph Agents["Agent Loop"]
+        Coder[Coder agent]:::core
+        Reviewer[Reviewer agent]:::core
+        Tester[Tester agent]:::core
+        Gemini{{Gemini API optional}}:::external
+    end
+
+    subgraph Editing["Structured Code Boundary"]
+        Refactorer[LibCST refactorer]:::core
+        Generated[Generated CodeFile models]:::metadata
+        Provenance[Source degraded warnings errors]:::metadata
+    end
+
+    subgraph Execution["Sandbox Boundary"]
+        Sandbox[Docker sandbox runner]:::core
+        Docker[(Docker optional)]:::external
+        Results[TestResult and SandboxResult]:::metadata
+    end
+
+    Prompt --> Coder
+    Coder <-->|optional generation| Gemini
+    Coder -. parse or model fallback .-> Provenance
+    Coder --> Generated --> Reviewer
+    Reviewer <-->|optional review| Gemini
+    Reviewer -. parse fallback .-> Provenance
+    Reviewer --> Tester --> Sandbox
+    Sandbox <-->|real execution| Docker
+    Sandbox -. mock or failed execution .-> Results
+    Results -->|feedback loop| Coder
+    Refactorer --> Generated
+    Provenance --> Maintainer
+    Results --> Maintainer
+    Generated --> Maintainer
 ```
 
 ## Main Components
