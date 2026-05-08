@@ -2,6 +2,11 @@
 
 Experimental Python helpers for combining Gemini text generation, LibCST refactoring utilities, and Docker-based execution checks. The project is useful for local demos and tests, but generated output should be reviewed before use.
 
+## Portfolio Review
+
+- [Architecture](docs/ARCHITECTURE.md) - component boundaries, data flow, external dependencies, and degraded-mode behavior.
+- [Demo Guide](docs/DEMO.md) - safe local walkthrough commands and recruiter-facing talking points.
+
 ## What Works Today
 
 - Pydantic models describe tasks, generated files, reviews, test results, and sandbox results.
